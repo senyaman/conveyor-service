@@ -135,6 +135,7 @@ public class CalculationServiceImpl implements CalculationService {
 
     @Override
     public BigDecimal calculatePsk(BigDecimal monthlyPayment, Integer term) {
+        term = term * AppConstants.BASE_PERIOD;
         return monthlyPayment.multiply(BigDecimal.valueOf(term));
     }
 
