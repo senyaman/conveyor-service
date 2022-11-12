@@ -4,6 +4,7 @@ import com.giftmaseya.conveyorservice.dto.CreditDTO;
 import com.giftmaseya.conveyorservice.dto.EmploymentDTO;
 import com.giftmaseya.conveyorservice.dto.PaymentScheduleElement;
 import com.giftmaseya.conveyorservice.dto.ScoringDataDTO;
+import com.giftmaseya.conveyorservice.exception.ConveyorException;
 import com.giftmaseya.conveyorservice.service.CalculationService;
 import com.giftmaseya.conveyorservice.utils.*;
 import lombok.extern.slf4j.Slf4j;
@@ -31,22 +32,22 @@ public class CalculationServiceImpl implements CalculationService {
 
         if(employmentInfo.getEmploymentStatus() == EmploymentStatusEnum.SELF_EMPLOYED) {
             log.info("rate increases by 1 with employment status of SELF_EMPLOYED");
-            rate = rate.add(BigDecimal.ONE);
+            rate = rate.add(AppConstants.SELF_EMPLOYED_RATE);
         } else if (employmentInfo.getEmploymentStatus() == EmploymentStatusEnum.UNEMPLOYED) {
             log.info("Refusal: cannot offer loan to an unemployed individual");
         } else if (employmentInfo.getEmploymentStatus() == EmploymentStatusEnum.BUSINESS_OWNER) {
             log.info("rate increases by three for employment status of BUSINESS_OWNER");
-            rate = rate.add(BigDecimal.valueOf(3));
+            rate = rate.add(AppConstants.BUSINESS_OWNER_RATE);
         }
 
         if(employmentInfo.getPosition() == PositionEnum.TOP_MANAGER) {
             log.info("rate decrease by 4 for top manager");
-            rate = rate.subtract(BigDecimal.valueOf(4));
+            rate = rate.subtract(AppConstants.TOP_MAN_RATE);
         }
 
         if(employmentInfo.getPosition() == PositionEnum.MIDDLE_MANAGER) {
             log.info("rate decreases by 2 for middle manager");
-            rate = rate.subtract(BigDecimal.valueOf(2));
+            rate = rate.subtract(AppConstants.MIDDLE_MAN_RATE);
         }
 
         if(scoring.getAmount().compareTo(employmentInfo.getSalary().multiply(BigDecimal.valueOf(20))) > 0) {
@@ -55,10 +56,10 @@ public class CalculationServiceImpl implements CalculationService {
 
         if(scoring.getMaritalStatus() == MaritalStatusEnum.MARRIED) {
             log.info("rate is reduced by 3 because marital status is MARRIED");
-            rate = rate.subtract(BigDecimal.valueOf(3));
+            rate = rate.subtract(AppConstants.MARRIED_RATE);
         } else if(scoring.getMaritalStatus() == MaritalStatusEnum.DIVORCED) {
             log.info("rate is increased by 1 because marital status is DIVORCED");
-            rate = rate.add(BigDecimal.valueOf(1));
+            rate = rate.add(AppConstants.DIVORCED_RATE);
         }
 
         if(scoring.getDependentAmount() > 1) {
@@ -120,7 +121,7 @@ public class CalculationServiceImpl implements CalculationService {
         if(scoring.getBirthDate() != null) {
             return Period.between(scoring.getBirthDate(), LocalDate.now()).getYears();
         } else {
-            return 0;
+            throw new ConveyorException("Age cannot be less than 18 years old");
         }
     }
 
