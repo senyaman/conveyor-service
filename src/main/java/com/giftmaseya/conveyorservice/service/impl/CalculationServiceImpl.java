@@ -35,6 +35,7 @@ public class CalculationServiceImpl implements CalculationService {
             rate = rate.add(AppConstants.SELF_EMPLOYED_RATE);
         } else if (employmentInfo.getEmploymentStatus() == EmploymentStatusEnum.UNEMPLOYED) {
             log.info("Refusal: cannot offer loan to an unemployed individual");
+            throw new ConveyorException("Unemployed individual does not qualify for a loan");
         } else if (employmentInfo.getEmploymentStatus() == EmploymentStatusEnum.BUSINESS_OWNER) {
             log.info("rate increases by three for employment status of BUSINESS_OWNER");
             rate = rate.add(AppConstants.BUSINESS_OWNER_RATE);
@@ -50,8 +51,9 @@ public class CalculationServiceImpl implements CalculationService {
             rate = rate.subtract(AppConstants.MIDDLE_MAN_RATE);
         }
 
-        if(scoring.getAmount().compareTo(employmentInfo.getSalary().multiply(BigDecimal.valueOf(20))) > 0) {
+        if(employmentInfo.getSalary().multiply(BigDecimal.valueOf(20)).compareTo(scoring.getAmount()) < 0) {
             log.info("requested loan amount cannot be 20 times your salary");
+            throw new ConveyorException("requested loan amount cannot be 20 times your salary");
         }
 
         if(scoring.getMaritalStatus() == MaritalStatusEnum.MARRIED) {
@@ -70,11 +72,13 @@ public class CalculationServiceImpl implements CalculationService {
         long age = calculateAge(scoring);
         if(age < 20) {
             log.info("rejection: persons under 20 do not qualify for a loan");
+            throw new ConveyorException("rejection: persons under 20 do not qualify for a loan");
         } else if (age > 60) {
             log.info("rejection: persons over 60 do not qualify for a loan");
+            throw new ConveyorException("rejection: persons over 60 do not qualify for a loan");
         }
 
-        if((scoring.getGender() == GenderEnum.FEMALE) && (age >= 35 && age <=60)) {
+        if((scoring.getGender() == GenderEnum.FEMALE) && (age >= 35)) {
             log.info("rate is reduced by 3 because gender is FEMALE and age is between 35 and 60 ");
             rate = rate.subtract(BigDecimal.valueOf(3));
         }else if((scoring.getGender() == GenderEnum.MALE) && (age >= 30 && age <= 55)) {
@@ -84,8 +88,10 @@ public class CalculationServiceImpl implements CalculationService {
 
         if(employmentInfo.getWorkExperienceTotal() < 12) {
             log.info("refusal: total work experience not enough, less than 12 months");
+            throw new ConveyorException("refusal: total work experience not enough, less than 12 months");
         } else if(employmentInfo.getWorkExperienceCurrent() < 3) {
             log.info("refusal: current work experience not enough, less than 3 months");
+            throw new ConveyorException("refusal: current work experience not enough, less than 3 months");
         }
 
         return rate;
@@ -94,6 +100,8 @@ public class CalculationServiceImpl implements CalculationService {
 
     @Override
     public BigDecimal calcRate(Boolean isInsuranceEnabled, Boolean isSalaryClient) {
+
+        log.info("Calculating Rate");
 
         BigDecimal rate = AppConstants.INITIAL_RATE;
 
@@ -118,15 +126,25 @@ public class CalculationServiceImpl implements CalculationService {
 
     @Override
     public long calculateAge(ScoringDataDTO scoring) {
+
+        log.info("Checking for valid age");
+
         if(scoring.getBirthDate() != null) {
-            return Period.between(scoring.getBirthDate(), LocalDate.now()).getYears();
+            int age = Period.between(scoring.getBirthDate(), LocalDate.now()).getYears();
+            if(age >= 18) {
+                return age;
+            } else {
+                throw new ConveyorException("Age cannot be less than 18 years old");
+            }
         } else {
-            throw new ConveyorException("Age cannot be less than 18 years old");
+            throw new ConveyorException("value of birthDate cannot be null");
         }
     }
 
     @Override
     public BigDecimal calculatePsk(ScoringDataDTO scoringDataDTO, Integer term) {
+
+        log.info("Calculating the total cost of the loan");
 
         BigDecimal monthlyPayment = calcMonthlyPayment(scoringDataDTO, term);
         int numberOfPayments = term * AppConstants.BASE_PERIOD;
@@ -136,12 +154,17 @@ public class CalculationServiceImpl implements CalculationService {
 
     @Override
     public BigDecimal calculatePsk(BigDecimal monthlyPayment, Integer term) {
+
+        log.info("Calculating the total cost of the loan");
+
         term = term * AppConstants.BASE_PERIOD;
         return monthlyPayment.multiply(BigDecimal.valueOf(term));
     }
 
     @Override
     public BigDecimal calcMonthlyPayment(ScoringDataDTO scoringDataDTO, Integer term) {
+
+        log.info("Calculating monthly installments of the loan");
 
         MathContext mc = new MathContext(2);
 
@@ -162,6 +185,8 @@ public class CalculationServiceImpl implements CalculationService {
     @Override
     public BigDecimal calcMonthlyPayment(BigDecimal amount, BigDecimal rate, Integer term) {
 
+        log.info("Calculating monthly installments of the loan");
+
         MathContext mc = new MathContext(2);
 
         int numberOfPayments = term * AppConstants.BASE_PERIOD;
@@ -178,6 +203,8 @@ public class CalculationServiceImpl implements CalculationService {
 
     @Override
     public CreditDTO fillCreditInfo(ScoringDataDTO scoring) {
+
+        log.info("Generating credit information");
 
         BigDecimal rate = calcRate(scoring);
         BigDecimal monthlyPayment = calcMonthlyPayment(scoring, scoring.getTerm());
@@ -199,6 +226,8 @@ public class CalculationServiceImpl implements CalculationService {
 
     @Override
     public List<PaymentScheduleElement> generatePaymentSchedule(ScoringDataDTO scoringDataDTO) {
+
+        log.info("Generating the payment schedule");
 
         MathContext mc = new MathContext(2);
 
