@@ -9,9 +9,13 @@ import com.giftmaseya.conveyorservice.service.CalculationService;
 import com.giftmaseya.conveyorservice.utils.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import paqua.loan.amortization.api.LoanAmortizationCalculator;
+import paqua.loan.amortization.api.impl.LoanAmortizationCalculatorFactory;
+import paqua.loan.amortization.dto.Loan;
+import paqua.loan.amortization.dto.LoanAmortization;
 
 import java.math.BigDecimal;
-import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.ArrayList;
@@ -142,64 +146,42 @@ public class CalculationServiceImpl implements CalculationService {
     }
 
     @Override
-    public BigDecimal calculatePsk(ScoringDataDTO scoringDataDTO, Integer term) {
-
-        log.info("Calculating the total cost of the loan");
-
-        BigDecimal monthlyPayment = calcMonthlyPayment(scoringDataDTO, term);
-        int numberOfPayments = term * AppConstants.BASE_PERIOD;
-
-        return monthlyPayment.multiply(BigDecimal.valueOf(numberOfPayments));
-    }
-
-    @Override
-    public BigDecimal calculatePsk(BigDecimal monthlyPayment, Integer term) {
-
-        log.info("Calculating the total cost of the loan");
-
-        term = term * AppConstants.BASE_PERIOD;
-        return monthlyPayment.multiply(BigDecimal.valueOf(term));
-    }
-
-    @Override
-    public BigDecimal calcMonthlyPayment(ScoringDataDTO scoringDataDTO, Integer term) {
-
-        log.info("Calculating monthly installments of the loan");
-
-        MathContext mc = new MathContext(2);
-
-        BigDecimal principal = scoringDataDTO.getAmount();
-        BigDecimal rate = calcRate(scoringDataDTO);
-        int numberOfPayments = term * AppConstants.BASE_PERIOD;
-
-        BigDecimal monthlyInterestRate = rate.divide(BigDecimal.valueOf(100), mc)
-                .divide(BigDecimal.valueOf(AppConstants.BASE_PERIOD), mc);
-
-        BigDecimal numerator = monthlyInterestRate.multiply((BigDecimal.ONE.add(monthlyInterestRate)).pow(numberOfPayments));
-
-        BigDecimal denominator = (BigDecimal.ONE.add(monthlyInterestRate)).pow(numberOfPayments).subtract(BigDecimal.ONE);
-
-        return principal.multiply(numerator.divide(denominator, mc));
-    }
-
-    @Override
     public BigDecimal calcMonthlyPayment(BigDecimal amount, BigDecimal rate, Integer term) {
 
         log.info("Calculating monthly installments of the loan");
 
-        MathContext mc = new MathContext(2);
+        term = term * AppConstants.BASE_PERIOD;
 
-        int numberOfPayments = term * AppConstants.BASE_PERIOD;
+        Loan loan = Loan.builder()
+                .amount(amount)
+                .rate(rate)
+                .term(term)
+                .build();
 
-        BigDecimal monthlyInterestRate = rate.divide(BigDecimal.valueOf(100), mc)
-                .divide(BigDecimal.valueOf(AppConstants.BASE_PERIOD), mc);
-
-        BigDecimal numerator = monthlyInterestRate.multiply((BigDecimal.ONE.add(monthlyInterestRate)).pow(numberOfPayments));
-
-        BigDecimal denominator = (BigDecimal.ONE.add(monthlyInterestRate)).pow(numberOfPayments).subtract(BigDecimal.ONE);
-
-        return amount.multiply(numerator.divide(denominator, mc));
+        LoanAmortizationCalculator calculator = LoanAmortizationCalculatorFactory.create();
+        LoanAmortization amortization = calculator.calculate(loan);
+        return amortization.getMonthlyPaymentAmount();
     }
+
+    @Override
+    public BigDecimal calcPsk(BigDecimal amount, BigDecimal rate, Integer term) {
+
+        log.info("Calculating monthly installments of the loan");
+
+        term = term * AppConstants.BASE_PERIOD;
+
+        Loan loan = Loan.builder()
+                .amount(amount)
+                .rate(rate)
+                .term(term)
+                .build();
+
+        LoanAmortizationCalculator calculator = LoanAmortizationCalculatorFactory.create();
+        LoanAmortization amortization = calculator.calculate(loan);
+        return amortization.getOverPaymentAmount().add(amount);
+    }
+
+
 
     @Override
     public CreditDTO fillCreditInfo(ScoringDataDTO scoring) {
@@ -207,8 +189,8 @@ public class CalculationServiceImpl implements CalculationService {
         log.info("Generating credit information");
 
         BigDecimal rate = calcRate(scoring);
-        BigDecimal monthlyPayment = calcMonthlyPayment(scoring, scoring.getTerm());
-        BigDecimal psk = calculatePsk(scoring, scoring.getTerm());
+        BigDecimal monthlyPayment = calcMonthlyPayment(scoring.getAmount(), rate, scoring.getTerm());
+        BigDecimal psk = calcPsk(scoring.getAmount(), rate, scoring.getTerm());
 
         CreditDTO creditDTO = new CreditDTO();
         creditDTO.setAmount(scoring.getAmount());
@@ -229,12 +211,11 @@ public class CalculationServiceImpl implements CalculationService {
 
         log.info("Generating the payment schedule");
 
-        MathContext mc = new MathContext(2);
 
-        BigDecimal rate = calcRate(scoringDataDTO).divide(BigDecimal.valueOf(100), mc);
-        BigDecimal totalPayment = calcMonthlyPayment(scoringDataDTO, scoringDataDTO.getTerm());
-        BigDecimal remainingDebt = calculatePsk(scoringDataDTO, scoringDataDTO.getTerm());
-        BigDecimal monthlyInterestRate = rate.divide(BigDecimal.valueOf(AppConstants.BASE_PERIOD), mc);
+        BigDecimal rate = calcRate(scoringDataDTO).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_EVEN);
+        BigDecimal totalPayment = calcMonthlyPayment(scoringDataDTO.getAmount(), rate, scoringDataDTO.getTerm());
+        BigDecimal remainingDebt = calcPsk(scoringDataDTO.getAmount(), rate, scoringDataDTO.getTerm());
+        BigDecimal monthlyInterestRate = rate.divide(BigDecimal.valueOf(AppConstants.BASE_PERIOD), 2, RoundingMode.HALF_EVEN);
         int numberOfPayments = scoringDataDTO.getTerm() * AppConstants.BASE_PERIOD;
 
         List<PaymentScheduleElement> schedule = new ArrayList<>();

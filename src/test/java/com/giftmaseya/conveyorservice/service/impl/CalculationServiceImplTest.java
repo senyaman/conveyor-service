@@ -8,7 +8,6 @@ import com.giftmaseya.conveyorservice.utils.GenderEnum;
 import com.giftmaseya.conveyorservice.utils.MaritalStatusEnum;
 import com.giftmaseya.conveyorservice.utils.PositionEnum;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -80,6 +79,22 @@ class CalculationServiceImplTest {
     }
 
     @Test
+    void calcRateBasedOnFemaleAndAgeGreaterEqualThirtyFive() {
+        scoringDataDTO.setGender(GenderEnum.FEMALE);
+        scoringDataDTO.setBirthDate(LocalDate.of(1986, 1, 25));
+        BigDecimal expectedRate = new BigDecimal("4.75");
+        assertThat(calculationService.calcRate(scoringDataDTO)).isEqualTo(expectedRate);
+    }
+
+    @Test
+    void calcRateBasedOnMaleAndAgeGreaterEqual30LessEqual55() {
+        scoringDataDTO.setGender(GenderEnum.MALE);
+        scoringDataDTO.setBirthDate(LocalDate.of(1986, 1, 25));
+        BigDecimal expectedRate = new BigDecimal("4.75");
+        assertThat(calculationService.calcRate(scoringDataDTO)).isEqualTo(expectedRate);
+    }
+
+    @Test
     void calcRateBasedOnMaritalStatusDivorced() {
         scoringDataDTO.setMaritalStatus(MaritalStatusEnum.DIVORCED);
         BigDecimal expectedRate = new BigDecimal("11.75");
@@ -120,50 +135,76 @@ class CalculationServiceImplTest {
     @Test
     void throwExceptionIfLoanAmountTwentyTimesSalary() {
         scoringDataDTO.setAmount(BigDecimal.valueOf(500001));
-        System.out.println(employmentDTO.getSalary());
         assertThatThrownBy(() -> calculationService.calcRate(scoringDataDTO))
                 .isInstanceOf(ConveyorException.class)
                 .hasMessageContaining("requested loan amount cannot be 20 times your salary");
     }
 
-
     @Test
-    @Disabled
-    void testCalcRate() {
+    void throwExceptionIfWorkExperienceTotalLessTwelve() {
+        employmentDTO.setWorkExperienceTotal(10);
+        assertThatThrownBy(() -> calculationService.calcRate(scoringDataDTO))
+                .isInstanceOf(ConveyorException.class)
+                .hasMessageContaining("refusal: total work experience not enough, less than 12 months");
     }
 
     @Test
-    @Disabled
-    void calculateAge() {
+    void throwExceptionIfWorkExperienceCurrentLessThree() {
+        employmentDTO.setWorkExperienceCurrent(2);
+        assertThatThrownBy(() -> calculationService.calcRate(scoringDataDTO))
+                .isInstanceOf(ConveyorException.class)
+                .hasMessageContaining("refusal: current work experience not enough, less than 3 months");
     }
 
     @Test
-    @Disabled
+    void calcRateBasedOnInsuranceAndSalaryClient() {
+        BigDecimal expectedRate1 = new BigDecimal("11.25");
+        assertThat(calculationService.calcRate(false, false)).isEqualTo(expectedRate1);
+
+        BigDecimal expectedRate2 = new BigDecimal("10.25");
+        assertThat(calculationService.calcRate(false, true)).isEqualTo(expectedRate2);
+
+        BigDecimal expectedRate3 = new BigDecimal("10.25");
+        assertThat(calculationService.calcRate(true, false)).isEqualTo(expectedRate3);
+
+        BigDecimal expectedRate4 = new BigDecimal("8.25");
+        assertThat(calculationService.calcRate(true, true)).isEqualTo(expectedRate4);
+    }
+
+    @Test
+    void calculateAgeIfLessThanEighteen() {
+        scoringDataDTO.setBirthDate(LocalDate.of(2006, 2, 15));
+        assertThatThrownBy(() -> calculationService.calculateAge(scoringDataDTO))
+                .isInstanceOf(ConveyorException.class)
+                .hasMessageContaining("Age cannot be less than 18 years old");
+    }
+
+    @Test
+    void calculateAgeIfBirthDateIsNull() {
+        scoringDataDTO.setBirthDate(null);
+        assertThatThrownBy(() -> calculationService.calculateAge(scoringDataDTO))
+                .isInstanceOf(ConveyorException.class)
+                .hasMessageContaining("value of birthDate cannot be null");
+    }
+
+    @Test
     void calculatePsk() {
+        BigDecimal amount = scoringDataDTO.getAmount();
+        BigDecimal rate = new BigDecimal("11.25");
+        Integer term = scoringDataDTO.getTerm();
+        BigDecimal expectedPsk = new BigDecimal("20695.27");
+
+        assertThat(calculationService.calcPsk(amount, rate, term)).isEqualTo(expectedPsk);
     }
 
     @Test
-    @Disabled
-    void testCalculatePsk() {
-    }
-
-    @Test
-    @Disabled
     void calcMonthlyPayment() {
+        BigDecimal amount = scoringDataDTO.getAmount();
+        BigDecimal rate = new BigDecimal("11.25");
+        Integer term = scoringDataDTO.getTerm();
+        BigDecimal monthlyPayment = new BigDecimal("287.44");
+
+        assertThat(calculationService.calcMonthlyPayment(amount, rate, term)).isEqualTo(monthlyPayment);
     }
 
-    @Test
-    @Disabled
-    void testCalcMonthlyPayment() {
-    }
-
-    @Test
-    @Disabled
-    void fillCreditInfo() {
-    }
-
-    @Test
-    @Disabled
-    void generatePaymentSchedule() {
-    }
 }
