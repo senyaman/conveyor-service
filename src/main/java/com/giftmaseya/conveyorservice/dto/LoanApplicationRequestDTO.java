@@ -1,5 +1,6 @@
 package com.giftmaseya.conveyorservice.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import javax.validation.constraints.DecimalMin;
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
+@AllArgsConstructor
 public class LoanApplicationRequestDTO {
 
     @DecimalMin(value = "10000", message = "Amount cannot be less than 10 000")
