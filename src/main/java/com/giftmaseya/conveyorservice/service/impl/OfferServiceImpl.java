@@ -4,6 +4,7 @@ import com.giftmaseya.conveyorservice.dto.LoanApplicationRequestDTO;
 import com.giftmaseya.conveyorservice.dto.LoanOfferDTO;
 import com.giftmaseya.conveyorservice.service.CalculationService;
 import com.giftmaseya.conveyorservice.service.OfferService;
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -12,13 +13,10 @@ import java.util.List;
 
 @Slf4j
 @Service
+@AllArgsConstructor
 public class OfferServiceImpl implements OfferService {
 
     private final CalculationService calculationService;
-
-    public OfferServiceImpl(CalculationService calculationService) {
-        this.calculationService = calculationService;
-    }
 
     @Override
     public List<LoanOfferDTO> loanOffers(LoanApplicationRequestDTO loanApplication) {
@@ -38,11 +36,12 @@ public class OfferServiceImpl implements OfferService {
                                           LoanApplicationRequestDTO request) {
 
         log.info("Generating a single loan offer");
+
         BigDecimal rate = calculationService.calcRate(isInsuranceEnabled, isSalaryClient);
         BigDecimal requestedAmount = request.getAmount();
         Integer term = request.getTerm();
         BigDecimal monthlyPayment = calculationService.calcMonthlyPayment(requestedAmount, rate, term);
-        BigDecimal totalAmount = calculationService.calculatePsk(monthlyPayment, term);
+        BigDecimal totalAmount = calculationService.calcPsk(requestedAmount, rate, term);
 
         LoanOfferDTO loanOffer = new LoanOfferDTO();
 
