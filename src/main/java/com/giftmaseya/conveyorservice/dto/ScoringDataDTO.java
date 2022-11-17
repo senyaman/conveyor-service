@@ -2,16 +2,12 @@ package com.giftmaseya.conveyorservice.dto;
 
 import com.giftmaseya.conveyorservice.utils.GenderEnum;
 import com.giftmaseya.conveyorservice.utils.MaritalStatusEnum;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
 public class ScoringDataDTO {
     private BigDecimal amount;
     private Integer term;
