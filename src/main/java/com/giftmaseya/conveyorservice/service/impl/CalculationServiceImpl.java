@@ -9,13 +9,9 @@ import com.giftmaseya.conveyorservice.service.CalculationService;
 import com.giftmaseya.conveyorservice.utils.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import paqua.loan.amortization.api.LoanAmortizationCalculator;
-import paqua.loan.amortization.api.impl.LoanAmortizationCalculatorFactory;
-import paqua.loan.amortization.dto.Loan;
-import paqua.loan.amortization.dto.LoanAmortization;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.math.MathContext;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.ArrayList;
@@ -39,7 +35,6 @@ public class CalculationServiceImpl implements CalculationService {
             rate = rate.add(AppConstants.SELF_EMPLOYED_RATE);
         } else if (employmentInfo.getEmploymentStatus() == EmploymentStatusEnum.UNEMPLOYED) {
             log.info("Refusal: cannot offer loan to an unemployed individual");
-            throw new ConveyorException("Unemployed individual does not qualify for a loan");
         } else if (employmentInfo.getEmploymentStatus() == EmploymentStatusEnum.BUSINESS_OWNER) {
             log.info("rate increases by three for employment status of BUSINESS_OWNER");
             rate = rate.add(AppConstants.BUSINESS_OWNER_RATE);
@@ -55,9 +50,8 @@ public class CalculationServiceImpl implements CalculationService {
             rate = rate.subtract(AppConstants.MIDDLE_MAN_RATE);
         }
 
-        if(employmentInfo.getSalary().multiply(BigDecimal.valueOf(20)).compareTo(scoring.getAmount()) < 0) {
+        if(scoring.getAmount().compareTo(employmentInfo.getSalary().multiply(BigDecimal.valueOf(20))) > 0) {
             log.info("requested loan amount cannot be 20 times your salary");
-            throw new ConveyorException("requested loan amount cannot be 20 times your salary");
         }
 
         if(scoring.getMaritalStatus() == MaritalStatusEnum.MARRIED) {
@@ -76,13 +70,11 @@ public class CalculationServiceImpl implements CalculationService {
         long age = calculateAge(scoring);
         if(age < 20) {
             log.info("rejection: persons under 20 do not qualify for a loan");
-            throw new ConveyorException("rejection: persons under 20 do not qualify for a loan");
         } else if (age > 60) {
             log.info("rejection: persons over 60 do not qualify for a loan");
-            throw new ConveyorException("rejection: persons over 60 do not qualify for a loan");
         }
 
-        if((scoring.getGender() == GenderEnum.FEMALE) && (age >= 35)) {
+        if((scoring.getGender() == GenderEnum.FEMALE) && (age >= 35 && age <=60)) {
             log.info("rate is reduced by 3 because gender is FEMALE and age is between 35 and 60 ");
             rate = rate.subtract(BigDecimal.valueOf(3));
         }else if((scoring.getGender() == GenderEnum.MALE) && (age >= 30 && age <= 55)) {
@@ -92,10 +84,8 @@ public class CalculationServiceImpl implements CalculationService {
 
         if(employmentInfo.getWorkExperienceTotal() < 12) {
             log.info("refusal: total work experience not enough, less than 12 months");
-            throw new ConveyorException("refusal: total work experience not enough, less than 12 months");
         } else if(employmentInfo.getWorkExperienceCurrent() < 3) {
             log.info("refusal: current work experience not enough, less than 3 months");
-            throw new ConveyorException("refusal: current work experience not enough, less than 3 months");
         }
 
         return rate;
@@ -104,8 +94,6 @@ public class CalculationServiceImpl implements CalculationService {
 
     @Override
     public BigDecimal calcRate(Boolean isInsuranceEnabled, Boolean isSalaryClient) {
-
-        log.info("Calculating Rate");
 
         BigDecimal rate = AppConstants.INITIAL_RATE;
 
@@ -130,67 +118,70 @@ public class CalculationServiceImpl implements CalculationService {
 
     @Override
     public long calculateAge(ScoringDataDTO scoring) {
-
-        log.info("Checking for valid age");
-
         if(scoring.getBirthDate() != null) {
-            int age = Period.between(scoring.getBirthDate(), LocalDate.now()).getYears();
-            if(age >= 18) {
-                return age;
-            } else {
-                throw new ConveyorException("Age cannot be less than 18 years old");
-            }
+            return Period.between(scoring.getBirthDate(), LocalDate.now()).getYears();
         } else {
-            throw new ConveyorException("value of birthDate cannot be null");
+            throw new ConveyorException("Age cannot be less than 18 years old");
         }
+    }
+
+    @Override
+    public BigDecimal calculatePsk(ScoringDataDTO scoringDataDTO, Integer term) {
+
+        BigDecimal monthlyPayment = calcMonthlyPayment(scoringDataDTO, term);
+        int numberOfPayments = term * AppConstants.BASE_PERIOD;
+
+        return monthlyPayment.multiply(BigDecimal.valueOf(numberOfPayments));
+    }
+
+    @Override
+    public BigDecimal calculatePsk(BigDecimal monthlyPayment, Integer term) {
+        term = term * AppConstants.BASE_PERIOD;
+        return monthlyPayment.multiply(BigDecimal.valueOf(term));
+    }
+
+    @Override
+    public BigDecimal calcMonthlyPayment(ScoringDataDTO scoringDataDTO, Integer term) {
+
+        MathContext mc = new MathContext(2);
+
+        BigDecimal principal = scoringDataDTO.getAmount();
+        BigDecimal rate = calcRate(scoringDataDTO);
+        int numberOfPayments = term * AppConstants.BASE_PERIOD;
+
+        BigDecimal monthlyInterestRate = rate.divide(BigDecimal.valueOf(100), mc)
+                .divide(BigDecimal.valueOf(AppConstants.BASE_PERIOD), mc);
+
+        BigDecimal numerator = monthlyInterestRate.multiply((BigDecimal.ONE.add(monthlyInterestRate)).pow(numberOfPayments));
+
+        BigDecimal denominator = (BigDecimal.ONE.add(monthlyInterestRate)).pow(numberOfPayments).subtract(BigDecimal.ONE);
+
+        return principal.multiply(numerator.divide(denominator, mc));
     }
 
     @Override
     public BigDecimal calcMonthlyPayment(BigDecimal amount, BigDecimal rate, Integer term) {
 
-        log.info("Calculating monthly installments of the loan");
+        MathContext mc = new MathContext(2);
 
-        term = term * AppConstants.BASE_PERIOD;
+        int numberOfPayments = term * AppConstants.BASE_PERIOD;
 
-        Loan loan = Loan.builder()
-                .amount(amount)
-                .rate(rate)
-                .term(term)
-                .build();
+        BigDecimal monthlyInterestRate = rate.divide(BigDecimal.valueOf(100), mc)
+                .divide(BigDecimal.valueOf(AppConstants.BASE_PERIOD), mc);
 
-        LoanAmortizationCalculator calculator = LoanAmortizationCalculatorFactory.create();
-        LoanAmortization amortization = calculator.calculate(loan);
-        return amortization.getMonthlyPaymentAmount();
+        BigDecimal numerator = monthlyInterestRate.multiply((BigDecimal.ONE.add(monthlyInterestRate)).pow(numberOfPayments));
+
+        BigDecimal denominator = (BigDecimal.ONE.add(monthlyInterestRate)).pow(numberOfPayments).subtract(BigDecimal.ONE);
+
+        return amount.multiply(numerator.divide(denominator, mc));
     }
-
-    @Override
-    public BigDecimal calcPsk(BigDecimal amount, BigDecimal rate, Integer term) {
-
-        log.info("Calculating monthly installments of the loan");
-
-        term = term * AppConstants.BASE_PERIOD;
-
-        Loan loan = Loan.builder()
-                .amount(amount)
-                .rate(rate)
-                .term(term)
-                .build();
-
-        LoanAmortizationCalculator calculator = LoanAmortizationCalculatorFactory.create();
-        LoanAmortization amortization = calculator.calculate(loan);
-        return amortization.getOverPaymentAmount().add(amount);
-    }
-
-
 
     @Override
     public CreditDTO fillCreditInfo(ScoringDataDTO scoring) {
 
-        log.info("Generating credit information");
-
         BigDecimal rate = calcRate(scoring);
-        BigDecimal monthlyPayment = calcMonthlyPayment(scoring.getAmount(), rate, scoring.getTerm());
-        BigDecimal psk = calcPsk(scoring.getAmount(), rate, scoring.getTerm());
+        BigDecimal monthlyPayment = calcMonthlyPayment(scoring, scoring.getTerm());
+        BigDecimal psk = calculatePsk(scoring, scoring.getTerm());
 
         CreditDTO creditDTO = new CreditDTO();
         creditDTO.setAmount(scoring.getAmount());
@@ -209,13 +200,12 @@ public class CalculationServiceImpl implements CalculationService {
     @Override
     public List<PaymentScheduleElement> generatePaymentSchedule(ScoringDataDTO scoringDataDTO) {
 
-        log.info("Generating the payment schedule");
+        MathContext mc = new MathContext(2);
 
-
-        BigDecimal rate = calcRate(scoringDataDTO).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_EVEN);
-        BigDecimal totalPayment = calcMonthlyPayment(scoringDataDTO.getAmount(), rate, scoringDataDTO.getTerm());
-        BigDecimal remainingDebt = calcPsk(scoringDataDTO.getAmount(), rate, scoringDataDTO.getTerm());
-        BigDecimal monthlyInterestRate = rate.divide(BigDecimal.valueOf(AppConstants.BASE_PERIOD), 2, RoundingMode.HALF_EVEN);
+        BigDecimal rate = calcRate(scoringDataDTO).divide(BigDecimal.valueOf(100), mc);
+        BigDecimal totalPayment = calcMonthlyPayment(scoringDataDTO, scoringDataDTO.getTerm());
+        BigDecimal remainingDebt = calculatePsk(scoringDataDTO, scoringDataDTO.getTerm());
+        BigDecimal monthlyInterestRate = rate.divide(BigDecimal.valueOf(AppConstants.BASE_PERIOD), mc);
         int numberOfPayments = scoringDataDTO.getTerm() * AppConstants.BASE_PERIOD;
 
         List<PaymentScheduleElement> schedule = new ArrayList<>();
