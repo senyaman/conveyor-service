@@ -16,8 +16,8 @@ public class SwaggerConfig {
 
     private ApiInfo apiInfo() {
         return new ApiInfo(
-                "Credit Conveyor",
-                "Credit Conveyor REST APIs Documentation",
+                "Conveyor Service APIs",
+                "Conveyor Service REST APIs Documentation",
                 "1.0.0",
                 "",
                 new Contact("Gift", "", "gift@gmail.com"),
