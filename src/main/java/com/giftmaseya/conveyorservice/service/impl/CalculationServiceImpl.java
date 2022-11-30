@@ -32,6 +32,7 @@ public class CalculationServiceImpl implements CalculationService {
 
         BigDecimal rate = new BigDecimal(String.valueOf(AppConstants.INITIAL_RATE));
 
+        log.info("populating employment information");
         EmploymentDTO employmentInfo = scoring.getEmployment();
 
         if(employmentInfo.getEmploymentStatus() == EmploymentStatusEnum.SELF_EMPLOYED) {

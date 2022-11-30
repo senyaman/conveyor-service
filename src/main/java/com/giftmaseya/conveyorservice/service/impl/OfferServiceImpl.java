@@ -4,7 +4,7 @@ import com.giftmaseya.conveyorservice.dto.LoanApplicationRequestDTO;
 import com.giftmaseya.conveyorservice.dto.LoanOfferDTO;
 import com.giftmaseya.conveyorservice.service.CalculationService;
 import com.giftmaseya.conveyorservice.service.OfferService;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -13,7 +13,7 @@ import java.util.List;
 
 @Slf4j
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class OfferServiceImpl implements OfferService {
 
     private final CalculationService calculationService;

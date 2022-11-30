@@ -12,7 +12,6 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @NoArgsConstructor
 public class EmploymentDTO {
-
     private EmploymentStatusEnum employmentStatus;
     private String employerINN;
     private BigDecimal salary;
